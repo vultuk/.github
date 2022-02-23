@@ -1,0 +1,9 @@
+name: Checkout Repository
+on: workflow_call
+
+jobs:
+  quick_test:
+    name: Checkout Repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
