@@ -9,4 +9,4 @@ jobs:
       name: Preview
       url: https://www.google.com
     steps:
-      - uses: ./.github/workflows/checkout.yml
+      - uses: checkout.yml
