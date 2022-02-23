@@ -9,4 +9,4 @@ jobs:
       name: Preview
       url: https://www.google.com
     steps:
-      - uses: checkout.yml
+      - uses: vultuk/.github/.github/workflows/checkout.yml@main
