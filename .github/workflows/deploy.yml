@@ -1,0 +1,58 @@
+name: Build, Test, Publish and Deploy
+on:
+  workflow_call:
+    secrets:
+      NPM_AUTH_TOKEN:
+        required: false
+      GIT_TOKEN:
+        required: true
+      REGISTRY:
+        required: false
+
+env:
+  VERSION_FLAG: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && '--releaseAs=prerelease --preid=rc' || github.ref_name == 'main' && '--skipProjectChangelog' || github.ref_name == 'staging' && '--releaseAs=prerelease --preid=beta' || '--releaseAs=prerelease --preid=alpha' }}
+  NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+  REF_NAME_TEST: ${{ github.ref_name }}
+  TEST_CHECK: ${{ github.ref_name == 'main' && '--skipProjectChangelog' || 'another' }}
+
+jobs:
+  build-test-publish-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout appropriate version
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || '' }}
+          fetch-depth: 0
+      - name: Set git user details for git
+        run: |
+          git config --global user.email "actions@cdirs.com"
+          git config --global user.name "CDIRS Action Bot"
+      - name: Setup Node with yarn cache
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "yarn"
+      - name: Install yarn dependencies
+        run: yarn install --frozen-lockfile
+      - name: Set NPM auth token for publishing requirements
+        run: npm config set //${{ secrets.REGISTRY || 'registry.npmjs.org' }}/:_authToken=${{ env.NPM_AUTH_TOKEN }}
+      - name: Derive appropriate SHAs `nx affected` commands
+        uses: nrwl/nx-set-shas@v3
+      - name: Bump version numbers where required
+        run: npx nx affected --parallel=1 --target=version --baseBranch=HEAD~1 ${{ env.VERSION_FLAG }}
+      - name: Push tags, version and changelog back to git
+        run: git push --follow-tags
+      - name: Lint changed libraries and apps
+        run: npx nx affected --target=lint --parallel=3
+      - name: Test changed libraries and apps
+        run: npx nx affected --target=test --parallel=3
+      - name: E2E test changed libraries and apps
+        run: npx nx affected --target=e2e --parallel=3
+      - name: Build changed libraries and apps
+        run: npx nx affected --target=build --parallel=3 --configuration=${{ github.ref_name == 'main' && 'production' || 'development' }}
+      - name: Deploy changed libraries and apps
+        run: npx nx affected --target=deploy --parallel=3 --configuration=${{ github.ref_name == 'main' && 'production' || 'development' }}
+      - name: Publish changed libraries and apps
+        run: npx nx affected --target=publish --parallel=3 --configuration=${{ github.ref_name == 'main' && 'production' || 'development' }}
